@@ -1,36 +1,33 @@
 <?php
 /**
- * Standalone Script to Bind Bitrix24 Task Placement via Webhook or REST
+ * Standalone Script to Unbind Duplicates & Register Single Bitrix24 Task Placement
  */
 require_once __DIR__ . '/crest.php';
 
-// Calculate current public URL or default handler URL
-$domainUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
-$handlerUrl = $domainUrl . '/index.php';
+$handlerUrl = 'https://keenenter.com/task_chat/index.php';
 
-echo "=== Bitrix24 Placement Registration ===\n";
-echo "Handler URL: " . $handlerUrl . "\n\n";
+echo "=== Cleaning Duplicates & Registering Single Placement ===\n";
 
-// Bind TASK_VIEW_TAB
+// 1. Unbind all previous placements
+echo "1. Unbinding previous placements...\n";
+$unTab = CRest::call('placement.unbind', ['PLACEMENT' => 'TASK_VIEW_TAB']);
+$unSidebar = CRest::call('placement.unbind', ['PLACEMENT' => 'TASK_VIEW_SIDEBAR']);
+$unTop = CRest::call('placement.unbind', ['PLACEMENT' => 'TASK_VIEW_TOP_PANEL']);
+
+print_r(['unbind_tab' => $unTab, 'unbind_sidebar' => $unSidebar, 'unbind_top' => $unTop]);
+
+// 2. Bind ONLY ONE placement (TASK_VIEW_TAB)
+echo "\n2. Binding single placement (TASK_VIEW_TAB)...\n";
 $resTab = CRest::call('placement.bind', [
     'PLACEMENT' => 'TASK_VIEW_TAB',
     'HANDLER' => $handlerUrl,
     'TITLE' => 'Task Secure Chat',
-    'DESCRIPTION' => 'Custom Task Chat Widget with Message Visibility Selector'
+    'DESCRIPTION' => 'Custom Task Chat Widget with Message Visibility Selector',
+    'LANG_ALL' => [
+        'en' => ['TITLE' => 'Task Secure Chat'],
+        'ar' => ['TITLE' => 'محادثة المهام الخاصة']
+    ]
 ]);
 
-echo "1. TASK_VIEW_TAB Result:\n";
 print_r($resTab);
-echo "\n";
-
-// Bind TASK_VIEW_SIDEBAR
-$resSidebar = CRest::call('placement.bind', [
-    'PLACEMENT' => 'TASK_VIEW_SIDEBAR',
-    'HANDLER' => $handlerUrl,
-    'TITLE' => 'Task Secure Chat',
-    'DESCRIPTION' => 'Custom Task Chat Widget with Message Visibility Selector'
-]);
-
-echo "2. TASK_VIEW_SIDEBAR Result:\n";
-print_r($resSidebar);
-echo "\n";
+echo "\nDone!\n";

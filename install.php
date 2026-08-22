@@ -8,7 +8,12 @@ $results = [];
 $hasAuth = !empty($auth['auth_token']) && !empty($auth['domain']);
 
 if ($hasAuth) {
-    // Bind TASK_VIEW_TAB
+    // 1. Unbind all existing task card placements to remove any duplicates
+    CRest::call('placement.unbind', ['PLACEMENT' => 'TASK_VIEW_TAB']);
+    CRest::call('placement.unbind', ['PLACEMENT' => 'TASK_VIEW_SIDEBAR']);
+    CRest::call('placement.unbind', ['PLACEMENT' => 'TASK_VIEW_TOP_PANEL']);
+
+    // 2. Bind ONLY ONE placement (TASK_VIEW_TAB)
     $bindTab = CRest::call('placement.bind', [
         'PLACEMENT' => 'TASK_VIEW_TAB',
         'HANDLER' => $handlerUrl,
@@ -16,23 +21,10 @@ if ($hasAuth) {
         'DESCRIPTION' => 'Custom Chat with Message Visibility Selector',
         'LANG_ALL' => [
             'en' => ['TITLE' => 'Task Secure Chat'],
-            'ar' => ['TITLE' => 'محادثة المهام الخاصه']
+            'ar' => ['TITLE' => 'محادثة المهام الخاصة']
         ]
     ]);
     $results['TASK_VIEW_TAB'] = $bindTab;
-
-    // Bind TASK_VIEW_SIDEBAR
-    $bindSidebar = CRest::call('placement.bind', [
-        'PLACEMENT' => 'TASK_VIEW_SIDEBAR',
-        'HANDLER' => $handlerUrl,
-        'TITLE' => 'Task Secure Chat',
-        'DESCRIPTION' => 'Custom Chat with Message Visibility Selector',
-        'LANG_ALL' => [
-            'en' => ['TITLE' => 'Task Secure Chat'],
-            'ar' => ['TITLE' => 'محادثة المهام الخاصه']
-        ]
-    ]);
-    $results['TASK_VIEW_SIDEBAR'] = $bindSidebar;
 }
 ?>
 <!DOCTYPE html>
@@ -52,7 +44,6 @@ if ($hasAuth) {
         .error { color: #dc2626; font-weight: bold; }
         .btn { background: #2fc6f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: background 0.2s; }
         .btn:hover { background: #1ab0e0; }
-        .steps { text-align: left; font-size: 13px; color: #475569; background: #eff6ff; border: 1px solid #bfdbfe; padding: 16px; border-radius: 8px; margin-bottom: 20px; line-height: 1.6; }
     </style>
 </head>
 <body>
@@ -61,34 +52,20 @@ if ($hasAuth) {
         <h1>Bitrix24 Task Chat Installation</h1>
 
         <?php if ($hasAuth): ?>
-            <p>Placement registration response from Bitrix24:</p>
+            <p>Duplicates removed and single placement bound successfully!</p>
             <div class="status">
                 <div><strong>Placement Handler:</strong> <?= htmlspecialchars($handlerUrl) ?></div>
-                <div><strong>TASK_VIEW_TAB Status:</strong> 
+                <div><strong>TASK_VIEW_TAB Registration:</strong> 
                     <span class="<?= isset($results['TASK_VIEW_TAB']['result']) && $results['TASK_VIEW_TAB']['result'] ? 'success' : 'error' ?>">
                         <?= json_encode($results['TASK_VIEW_TAB']) ?>
                     </span>
                 </div>
-                <div><strong>TASK_VIEW_SIDEBAR Status:</strong> 
-                    <span class="<?= isset($results['TASK_VIEW_SIDEBAR']['result']) && $results['TASK_VIEW_SIDEBAR']['result'] ? 'success' : 'error' ?>">
-                        <?= json_encode($results['TASK_VIEW_SIDEBAR']) ?>
-                    </span>
-                </div>
             </div>
 
-            <button class="btn" onclick="finishInstall()">Finish Installation</button>
+            <button class="btn" onclick="finishInstall()">Finish & Save</button>
         <?php else: ?>
-            <p class="error">⚠️ Warning: Missing Bitrix24 Application Token (AUTH_ID)</p>
-            <div class="steps">
-                <strong>Why this happened:</strong><br>
-                Bitrix24 requires <code>placement.bind</code> to be called inside a registered <strong>Local Application</strong> session. Webhooks or direct browser URL visits cannot bind UI placements because Bitrix24 demands <em>Application Context</em>.<br><br>
-                <strong>How to fix in 3 simple steps:</strong><br>
-                1. Go to Bitrix24 ➔ <strong>Developer Resources</strong> ➔ <strong>Integrations</strong> ➔ <strong>Add Local Application</strong>.<br>
-                2. Select <strong>Server-side local app with UI</strong>.<br>
-                3. Set <strong>Initial Installation URL</strong> to: <code>https://keenenter.com/task_chat/install.php</code><br>
-                4. Set <strong>Placement URL</strong> to: <code>https://keenenter.com/task_chat/index.php</code><br>
-                5. Check scopes: <code>placement</code>, <code>task</code>, <code>user</code> ➔ Click <strong>Save</strong>.
-            </div>
+            <p class="error">⚠️ Warning: Missing Application Token (AUTH_ID)</p>
+            <p>Please open or re-install the application inside Bitrix24 Local Application settings.</p>
         <?php endif; ?>
     </div>
 
@@ -97,7 +74,7 @@ if ($hasAuth) {
             if (typeof BX24 !== 'undefined') {
                 BX24.installFinish();
             } else {
-                alert('Installation finished! You can refresh your task card now.');
+                alert('Installation complete!');
             }
         }
         document.addEventListener('DOMContentLoaded', function() {
