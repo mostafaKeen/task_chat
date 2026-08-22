@@ -28,11 +28,12 @@ class CRest
         $domain = $sessionAuth['domain'] ?? '';
         $authToken = $sessionAuth['auth_token'] ?? '';
 
-        if (defined('C_REST_WEB_HOOK_URL') && !empty(C_REST_WEB_HOOK_URL)) {
-            $url = rtrim(C_REST_WEB_HOOK_URL, '/') . '/' . $method . '.json';
-        } elseif (!empty($domain) && !empty($authToken)) {
+        // If active OAuth token is provided (Local App installation or placement context), use OAuth token
+        if (!empty($domain) && !empty($authToken)) {
             $url = 'https://' . $domain . '/rest/' . $method . '.json';
             $params['auth'] = $authToken;
+        } elseif (defined('C_REST_WEB_HOOK_URL') && !empty(C_REST_WEB_HOOK_URL)) {
+            $url = rtrim(C_REST_WEB_HOOK_URL, '/') . '/' . $method . '.json';
         } else {
             return [
                 'error' => 'NO_AUTH',
@@ -68,8 +69,8 @@ class CRest
             session_start();
         }
 
-        $domain = $_SESSION['b24_domain'] ?? $_REQUEST['DOMAIN'] ?? $_POST['DOMAIN'] ?? '';
-        $authToken = $_SESSION['b24_auth_id'] ?? $_REQUEST['AUTH_ID'] ?? $_POST['AUTH_ID'] ?? '';
+        $domain = $_REQUEST['DOMAIN'] ?? $_POST['DOMAIN'] ?? $_GET['DOMAIN'] ?? $_SESSION['b24_domain'] ?? '';
+        $authToken = $_REQUEST['AUTH_ID'] ?? $_POST['AUTH_ID'] ?? $_GET['AUTH_ID'] ?? $_SESSION['b24_auth_id'] ?? '';
 
         if (!empty($domain)) {
             $_SESSION['b24_domain'] = $domain;
@@ -79,8 +80,8 @@ class CRest
         }
 
         return [
-            'domain' => $domain,
-            'auth_token' => $authToken
+            'domain' => $_SESSION['b24_domain'] ?? $domain,
+            'auth_token' => $_SESSION['b24_auth_id'] ?? $authToken
         ];
     }
 }
