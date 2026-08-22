@@ -1,0 +1,153 @@
+<?php
+header('Content-Type: application/json');
+require_once __DIR__ . '/crest.php';
+require_once __DIR__ . '/db.php';
+
+$action = $_REQUEST['action'] ?? '';
+$taskId = intval($_REQUEST['task_id'] ?? 0);
+
+if (!$taskId) {
+    echo json_encode(['status' => 'error', 'message' => 'Invalid or missing task_id']);
+    exit;
+}
+
+$pdo = getDbConnection();
+
+// Get Current User Info from Bitrix24
+$currentUserRes = CRest::call('user.current');
+if (isset($currentUserRes['error'])) {
+    echo json_encode(['status' => 'error', 'message' => 'Bitrix24 Auth Error: ' . ($currentUserRes['error_description'] ?? $currentUserRes['error'])]);
+    exit;
+}
+
+$currentUser = $currentUserRes['result'] ?? [];
+$currentUserId = intval($currentUser['ID'] ?? 0);
+$currentUserName = trim(($currentUser['NAME'] ?? '') . ' ' . ($currentUser['LAST_NAME'] ?? ''));
+$currentUserAvatar = $currentUser['PERSONAL_PHOTO'] ?? '';
+
+// Get Task Details to Check User Roles
+$taskRes = CRest::call('tasks.task.get', ['taskId' => $taskId]);
+$taskData = $taskRes['result']['task'] ?? [];
+
+$creatorId = intval($taskData['createdBy'] ?? 0);
+$responsibleId = intval($taskData['responsibleId'] ?? 0);
+
+$accomplices = [];
+if (!empty($taskData['accomplices'])) {
+    foreach ((array)$taskData['accomplices'] as $acc) {
+        $accomplices[] = intval(is_array($acc) ? ($acc['id'] ?? $acc['ID'] ?? 0) : $acc);
+    }
+}
+
+$auditors = [];
+if (!empty($taskData['auditors'])) {
+    foreach ((array)$taskData['auditors'] as $aud) {
+        $auditors[] = intval(is_array($aud) ? ($aud['id'] ?? $aud['ID'] ?? 0) : $aud);
+    }
+}
+
+$isCreator = ($currentUserId === $creatorId);
+$isResponsible = ($currentUserId === $responsibleId);
+$isAccomplice = in_array($currentUserId, $accomplices);
+$isAuditor = in_array($currentUserId, $auditors);
+
+// Team members include creator, responsible, accomplices, and auditors
+$isTeamMember = $isCreator || $isResponsible || $isAccomplice || $isAuditor;
+
+if ($action === 'get_messages') {
+    // Retrieve all messages for this task
+    $stmt = $pdo->prepare("SELECT * FROM task_chat_messages WHERE task_id = :task_id ORDER BY created_at ASC");
+    $stmt->execute([':task_id' => $taskId]);
+    $allMessages = $stmt->fetchAll();
+
+    $filteredMessages = [];
+
+    foreach ($allMessages as $msg) {
+        $vis = $msg['visibility'];
+        $senderId = intval($msg['sender_id']);
+
+        $canView = false;
+
+        if ($senderId === $currentUserId) {
+            // Sender can always view their own message
+            $canView = true;
+        } elseif ($vis === 'public') {
+            // Public messages are visible to everyone
+            $canView = true;
+        } elseif ($vis === 'internal') {
+            // Internal messages visible to team members
+            if ($isTeamMember) {
+                $canView = true;
+            }
+        } elseif ($vis === 'creator_assignee') {
+            // Visible only to creator and assignee/responsible
+            if ($isCreator || $isResponsible) {
+                $canView = true;
+            }
+        }
+
+        if ($canView) {
+            $filteredMessages[] = [
+                'id' => intval($msg['id']),
+                'sender_id' => $senderId,
+                'sender_name' => htmlspecialchars($msg['sender_name']),
+                'sender_avatar' => $msg['sender_avatar'],
+                'message' => htmlspecialchars($msg['message']),
+                'visibility' => $msg['visibility'],
+                'created_at' => $msg['created_at'],
+                'is_self' => ($senderId === $currentUserId)
+            ];
+        }
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'current_user' => [
+            'id' => $currentUserId,
+            'name' => $currentUserName,
+            'avatar' => $currentUserAvatar,
+            'is_creator' => $isCreator,
+            'is_responsible' => $isResponsible,
+            'is_team_member' => $isTeamMember
+        ],
+        'messages' => $filteredMessages
+    ]);
+    exit;
+}
+
+if ($action === 'send_message') {
+    $message = trim($_POST['message'] ?? '');
+    $visibility = $_POST['visibility'] ?? 'public';
+
+    $allowedVisibilities = ['public', 'internal', 'creator_assignee'];
+    if (!in_array($visibility, $allowedVisibilities)) {
+        $visibility = 'public';
+    }
+
+    if (empty($message)) {
+        echo json_encode(['status' => 'error', 'message' => 'Message content cannot be empty']);
+        exit;
+    }
+
+    $stmt = $pdo->prepare("
+        INSERT INTO task_chat_messages (task_id, sender_id, sender_name, sender_avatar, message, visibility)
+        VALUES (:task_id, :sender_id, :sender_name, :sender_avatar, :message, :visibility)
+    ");
+
+    $stmt->execute([
+        ':task_id' => $taskId,
+        ':sender_id' => $currentUserId,
+        ':sender_name' => $currentUserName,
+        ':sender_avatar' => $currentUserAvatar,
+        ':message' => $message,
+        ':visibility' => $visibility
+    ]);
+
+    echo json_encode([
+        'status' => 'success',
+        'message_id' => $pdo->lastInsertId()
+    ]);
+    exit;
+}
+
+echo json_encode(['status' => 'error', 'message' => 'Invalid action']);

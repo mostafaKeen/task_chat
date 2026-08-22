@@ -1,0 +1,71 @@
+<?php
+require_once __DIR__ . '/crest.php';
+
+$auth = CRest::getAuthData();
+$handlerUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['SCRIPT_NAME']) . '/index.php';
+
+$results = [];
+
+// Bind TASK_VIEW_TAB
+$bindTab = CRest::call('placement.bind', [
+    'PLACEMENT' => 'TASK_VIEW_TAB',
+    'HANDLER' => $handlerUrl,
+    'TITLE' => 'Task Secure Chat',
+    'DESCRIPTION' => 'Custom Chat with Message Visibility Selector'
+]);
+$results['TASK_VIEW_TAB'] = $bindTab;
+
+// Bind TASK_VIEW_SIDEBAR
+$bindSidebar = CRest::call('placement.bind', [
+    'PLACEMENT' => 'TASK_VIEW_SIDEBAR',
+    'HANDLER' => $handlerUrl,
+    'TITLE' => 'Task Secure Chat',
+    'DESCRIPTION' => 'Custom Chat with Message Visibility Selector'
+]);
+$results['TASK_VIEW_SIDEBAR'] = $bindSidebar;
+
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bitrix24 Task Chat Widget Installation</title>
+    <script src="//api.bitrix24.com/api/v1/"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f7fb; color: #333; padding: 40px; display: flex; justify-content: center; align-items: center; min-height: 80vh; }
+        .card { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); max-width: 550px; width: 100%; text-align: center; }
+        .icon { font-size: 48px; margin-bottom: 16px; }
+        h1 { font-size: 22px; margin-bottom: 12px; color: #202b3c; }
+        p { font-size: 14px; color: #64748b; line-height: 1.5; margin-bottom: 24px; }
+        .status { text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 13px; margin-bottom: 24px; }
+        .success { color: #16a34a; font-weight: bold; }
+        .btn { background: #2fc6f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: background 0.2s; }
+        .btn:hover { background: #1ab0e0; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">💬</div>
+        <h1>Bitrix24 Task Chat Widget Installed</h1>
+        <p>The Custom Chat widget with message visibility controls has been successfully registered in your Bitrix24 instance!</p>
+
+        <div class="status">
+            <div><strong>Placement URL:</strong> <?= htmlspecialchars($handlerUrl) ?></div>
+            <div><strong>TASK_VIEW_TAB Status:</strong> <span class="success"><?= isset($results['TASK_VIEW_TAB']['result']) && $results['TASK_VIEW_TAB']['result'] ? 'BOUND SUCCESS' : json_encode($results['TASK_VIEW_TAB']) ?></span></div>
+            <div><strong>TASK_VIEW_SIDEBAR Status:</strong> <span class="success"><?= isset($results['TASK_VIEW_SIDEBAR']['result']) && $results['TASK_VIEW_SIDEBAR']['result'] ? 'BOUND SUCCESS' : json_encode($results['TASK_VIEW_SIDEBAR']) ?></span></div>
+        </div>
+
+        <button class="btn" onclick="BX24.installFinish()">Finish Installation</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof BX24 !== 'undefined') {
+                BX24.init(function() {
+                    console.log('Installation context initialized');
+                });
+            }
+        });
+    </script>
+</body>
+</html>
