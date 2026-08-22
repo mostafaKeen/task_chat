@@ -2,7 +2,7 @@
 require_once __DIR__ . '/crest.php';
 
 $auth = CRest::getAuthData();
-$handlerUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['SCRIPT_NAME']) . '/index.php';
+$handlerUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . dirname($_SERVER['SCRIPT_NAME']) . '/index.php';
 
 $results = [];
 
@@ -11,7 +11,11 @@ $bindTab = CRest::call('placement.bind', [
     'PLACEMENT' => 'TASK_VIEW_TAB',
     'HANDLER' => $handlerUrl,
     'TITLE' => 'Task Secure Chat',
-    'DESCRIPTION' => 'Custom Chat with Message Visibility Selector'
+    'DESCRIPTION' => 'Custom Chat with Message Visibility Selector',
+    'LANG_ALL' => [
+        'en' => ['TITLE' => 'Task Secure Chat'],
+        'ar' => ['TITLE' => 'محادثة المهام الخاصه']
+    ]
 ]);
 $results['TASK_VIEW_TAB'] = $bindTab;
 
@@ -20,7 +24,11 @@ $bindSidebar = CRest::call('placement.bind', [
     'PLACEMENT' => 'TASK_VIEW_SIDEBAR',
     'HANDLER' => $handlerUrl,
     'TITLE' => 'Task Secure Chat',
-    'DESCRIPTION' => 'Custom Chat with Message Visibility Selector'
+    'DESCRIPTION' => 'Custom Chat with Message Visibility Selector',
+    'LANG_ALL' => [
+        'en' => ['TITLE' => 'Task Secure Chat'],
+        'ar' => ['TITLE' => 'محادثة المهام الخاصه']
+    ]
 ]);
 $results['TASK_VIEW_SIDEBAR'] = $bindSidebar;
 
@@ -46,19 +54,26 @@ $results['TASK_VIEW_SIDEBAR'] = $bindSidebar;
 <body>
     <div class="card">
         <div class="icon">💬</div>
-        <h1>Bitrix24 Task Chat Widget Installed</h1>
-        <p>The Custom Chat widget with message visibility controls has been successfully registered in your Bitrix24 instance!</p>
+        <h1>Bitrix24 Task Chat Widget Installation</h1>
+        <p>The Custom Chat widget with message visibility controls has been registered in your Bitrix24 instance!</p>
 
         <div class="status">
-            <div><strong>Placement URL:</strong> <?= htmlspecialchars($handlerUrl) ?></div>
-            <div><strong>TASK_VIEW_TAB Status:</strong> <span class="success"><?= isset($results['TASK_VIEW_TAB']['result']) && $results['TASK_VIEW_TAB']['result'] ? 'BOUND SUCCESS' : json_encode($results['TASK_VIEW_TAB']) ?></span></div>
-            <div><strong>TASK_VIEW_SIDEBAR Status:</strong> <span class="success"><?= isset($results['TASK_VIEW_SIDEBAR']['result']) && $results['TASK_VIEW_SIDEBAR']['result'] ? 'BOUND SUCCESS' : json_encode($results['TASK_VIEW_SIDEBAR']) ?></span></div>
+            <div><strong>Placement Handler:</strong> <?= htmlspecialchars($handlerUrl) ?></div>
+            <div><strong>TASK_VIEW_TAB Status:</strong> <span class="success"><?= json_encode($results['TASK_VIEW_TAB']) ?></span></div>
+            <div><strong>TASK_VIEW_SIDEBAR Status:</strong> <span class="success"><?= json_encode($results['TASK_VIEW_SIDEBAR']) ?></span></div>
         </div>
 
-        <button class="btn" onclick="BX24.installFinish()">Finish Installation</button>
+        <button class="btn" onclick="finishInstall()">Finish Installation</button>
     </div>
 
     <script>
+        function finishInstall() {
+            if (typeof BX24 !== 'undefined') {
+                BX24.installFinish();
+            } else {
+                alert('Installation finished! You can close this window.');
+            }
+        }
         document.addEventListener('DOMContentLoaded', function() {
             if (typeof BX24 !== 'undefined') {
                 BX24.init(function() {
