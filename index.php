@@ -80,6 +80,22 @@ $authId = htmlspecialchars($auth['auth_token'] ?? '');
                     <span class="icon">👥</span>
                     <span class="text">Creator & Assignee</span>
                 </label>
+                <label class="visibility-option" data-value="specific_users" title="Visible only to selected specific users">
+                    <input type="radio" name="msgVisibility" value="specific_users">
+                    <span class="icon">🎯</span>
+                    <span class="text">Specific Users</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Specific Users Picker Box (Hidden by default) -->
+        <div class="user-picker-container" id="userPickerContainer" style="display: none;">
+            <div class="picker-header">
+                <span>Select Target Users:</span>
+                <span class="picker-hint">Check users who can view this message</span>
+            </div>
+            <div class="user-checkbox-list" id="userCheckboxList">
+                <p class="picker-loading">Loading task participants...</p>
             </div>
         </div>
 

@@ -15,11 +15,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
     const visibilityOptions = document.querySelectorAll('.visibility-option');
+    const userPickerContainer = document.getElementById('userPickerContainer');
+    const userCheckboxList = document.getElementById('userCheckboxList');
 
     let currentVisibility = 'public';
     let isSubmitting = false;
     let pollInterval = null;
     let currentUser = null;
+    let cachedParticipants = [];
 
     // Initialize Bitrix24 JS SDK
     if (typeof BX24 !== 'undefined') {
@@ -46,8 +49,57 @@ document.addEventListener('DOMContentLoaded', function () {
                 radio.checked = true;
                 currentVisibility = radio.value;
             }
+
+            if (currentVisibility === 'specific_users') {
+                userPickerContainer.style.display = 'flex';
+                renderUserPicker(cachedParticipants);
+            } else {
+                userPickerContainer.style.display = 'none';
+            }
+            resizeFrame();
         });
     });
+
+    // Render User Checkbox Chips in Picker
+    function renderUserPicker(participants) {
+        if (!participants || participants.length === 0) {
+            userCheckboxList.innerHTML = '<p class="picker-loading">No other participants found in this task.</p>';
+            return;
+        }
+
+        let html = '';
+        participants.forEach(u => {
+            const isSelf = currentUser && (u.id === currentUser.id);
+            if (isSelf) return; // Don't show self in recipient picker
+
+            html += `
+                <label class="user-chip" data-id="${u.id}">
+                    <input type="checkbox" name="specificUsers" value="${u.id}">
+                    <span>${escapeHtml(u.name)}</span>
+                    ${u.role ? `<span class="role-tag">${escapeHtml(u.role)}</span>` : ''}
+                </label>
+            `;
+        });
+
+        if (html === '') {
+            html = '<p class="picker-loading">No other participants in task.</p>';
+        }
+
+        userCheckboxList.innerHTML = html;
+
+        // Toggle selected styling on user-chip click
+        const chips = userCheckboxList.querySelectorAll('.user-chip');
+        chips.forEach(chip => {
+            const cb = chip.querySelector('input[type="checkbox"]');
+            cb.addEventListener('change', function () {
+                if (this.checked) {
+                    chip.classList.add('selected');
+                } else {
+                    chip.classList.remove('selected');
+                }
+            });
+        });
+    }
 
     // Auto-expand textarea
     messageInput.addEventListener('input', function () {
@@ -83,6 +135,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 if (data.status === 'success') {
                     currentUser = data.current_user;
+                    cachedParticipants = data.participants || [];
+
+                    if (currentVisibility === 'specific_users' && userCheckboxList.children.length <= 1) {
+                        renderUserPicker(cachedParticipants);
+                    }
+
                     renderMessages(data.messages || []);
                 } else {
                     console.error('API Error:', data.message);
@@ -120,6 +178,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 visBadgeHtml = `<span class="visibility-badge internal">🔒 Internal Team</span>`;
             } else if (msg.visibility === 'creator_assignee') {
                 visBadgeHtml = `<span class="visibility-badge creator_assignee">👥 Creator & Assignee</span>`;
+            } else if (msg.visibility === 'specific_users') {
+                const targetCount = (msg.allowed_user_ids || []).length;
+                visBadgeHtml = `<span class="visibility-badge specific_users">🎯 Specific Users (${targetCount} target)</span>`;
             }
 
             const avatarContent = msg.sender_avatar 
@@ -153,6 +214,17 @@ document.addEventListener('DOMContentLoaded', function () {
         const text = messageInput.value.trim();
         if (!text || isSubmitting) return;
 
+        const selectedUserIds = [];
+        if (currentVisibility === 'specific_users') {
+            const checkedBoxes = userCheckboxList.querySelectorAll('input[type="checkbox"]:checked');
+            checkedBoxes.forEach(cb => selectedUserIds.push(parseInt(cb.value)));
+
+            if (selectedUserIds.length === 0) {
+                alert('Please select at least one target user for Specific Users visibility!');
+                return;
+            }
+        }
+
         isSubmitting = true;
         sendBtn.disabled = true;
         sendBtn.style.opacity = '0.6';
@@ -164,6 +236,7 @@ document.addEventListener('DOMContentLoaded', function () {
         formData.append('AUTH_ID', authId);
         formData.append('message', text);
         formData.append('visibility', currentVisibility);
+        formData.append('allowed_user_ids', JSON.stringify(selectedUserIds));
 
         fetch('api.php', {
             method: 'POST',
