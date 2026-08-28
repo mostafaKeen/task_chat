@@ -13,6 +13,52 @@ if (!$taskId) {
 
 $pdo = getDbConnection();
 
+/**
+ * Gets or creates a folder on Bitrix24 Drive for the specific task, using the task title and ID.
+ * Sanitizes the folder name to avoid invalid characters.
+ */
+function getOrCreateTaskFolder($taskId, $taskTitle) {
+    // Get application drive storage
+    $storageRes = CRest::call('disk.storage.getForApp');
+    if (isset($storageRes['error']) || empty($storageRes['result'])) {
+        return null;
+    }
+    
+    $storageId = $storageRes['result']['ID'];
+    
+    // Construct sanitized task folder name: "Task_Title (ID 123)"
+    // Sanitize title to remove characters that are not allowed in folder names
+    $sanitizedTitle = preg_replace('/[\\\/\:\*\?\"\<\>\|]/', '_', $taskTitle);
+    $folderName = trim($sanitizedTitle);
+    if (empty($folderName)) {
+        $folderName = "Task #" . $taskId;
+    } else {
+        $folderName = $folderName . " (ID " . $taskId . ")";
+    }
+
+    // Check if the folder already exists in the root of the app storage
+    $childrenRes = CRest::call('disk.storage.getChildren', ['id' => $storageId]);
+    if (!empty($childrenRes['result'])) {
+        foreach ($childrenRes['result'] as $child) {
+            if ($child['TYPE'] === 'folder' && $child['NAME'] === $folderName) {
+                return $child['ID'];
+            }
+        }
+    }
+
+    // Folder does not exist, create it
+    $createRes = CRest::call('disk.storage.addFolder', [
+        'id' => $storageId,
+        'data' => ['NAME' => $folderName]
+    ]);
+    
+    if (!empty($createRes['result']['ID'])) {
+        return $createRes['result']['ID'];
+    }
+
+    return null;
+}
+
 // Get Current User Info from Bitrix24
 $currentUserRes = CRest::call('user.current');
 if (isset($currentUserRes['error'])) {
@@ -135,6 +181,7 @@ if ($action === 'get_messages') {
                 'message' => htmlspecialchars($msg['message']),
                 'visibility' => $msg['visibility'],
                 'allowed_user_ids' => $allowedUserIds,
+                'file_attachments' => json_decode($msg['file_attachments'] ?? '[]', true),
                 'created_at' => $msg['created_at'],
                 'is_self' => ($senderId === $currentUserId)
             ];
@@ -166,8 +213,8 @@ if ($action === 'send_message') {
         $visibility = 'public';
     }
 
-    if (empty($message)) {
-        echo json_encode(['status' => 'error', 'message' => 'Message content cannot be empty']);
+    if (empty($message) && (!isset($_FILES['attachment']) || $_FILES['attachment']['error'] !== UPLOAD_ERR_OK)) {
+        echo json_encode(['status' => 'error', 'message' => 'Message content or file attachment is required']);
         exit;
     }
 
@@ -184,9 +231,101 @@ if ($action === 'send_message') {
         exit;
     }
 
+    // If a file is uploaded
+    $fileAttachments = [];
+    if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
+        $taskTitle = $taskData['title'] ?? 'Task #' . $taskId;
+        $folderId = getOrCreateTaskFolder($taskId, $taskTitle);
+        
+        if ($folderId) {
+            $fileName = $_FILES['attachment']['name'];
+            $fileTmpPath = $_FILES['attachment']['tmp_name'];
+            $fileBase64 = base64_encode(file_get_contents($fileTmpPath));
+            
+            // Build permissions (rights) array
+            $rights = [];
+            
+            // The sender should always have full access to their uploaded file
+            $rights[] = [
+                'TASK_ID' => 79, // disk_access_full
+                'ACCESS_CODE' => 'U' . $currentUserId
+            ];
+
+            if ($visibility === 'public') {
+                // Grant access to all task participants
+                foreach ($participantIds as $pId) {
+                    if ($pId !== $currentUserId) {
+                        $rights[] = [
+                            'TASK_ID' => 75, // disk_access_edit
+                            'ACCESS_CODE' => 'U' . $pId
+                        ];
+                    }
+                }
+            } elseif ($visibility === 'internal') {
+                // Grant access to all internal team members (Creator, Assignee, Accomplices, Auditors)
+                foreach ($participantIds as $pId) {
+                    if ($pId !== $currentUserId) {
+                        $rights[] = [
+                            'TASK_ID' => 75,
+                            'ACCESS_CODE' => 'U' . $pId
+                        ];
+                    }
+                }
+            } elseif ($visibility === 'creator_assignee') {
+                // Grant access only to Creator and Assignee
+                $cAndA = array_unique([$creatorId, $responsibleId]);
+                foreach ($cAndA as $pId) {
+                    if ($pId !== $currentUserId) {
+                        $rights[] = [
+                            'TASK_ID' => 75,
+                            'ACCESS_CODE' => 'U' . $pId
+                        ];
+                    }
+                }
+            } elseif ($visibility === 'specific_users') {
+                // Grant access only to specific users
+                foreach ($allowedUserIds as $pId) {
+                    if ($pId !== $currentUserId) {
+                        $rights[] = [
+                            'TASK_ID' => 75,
+                            'ACCESS_CODE' => 'U' . $pId
+                        ];
+                    }
+                }
+            }
+
+            // Upload the file to the task folder on Bitrix24 Disk
+            $uploadRes = CRest::call('disk.folder.uploadFile', [
+                'id' => $folderId,
+                'data' => ['NAME' => $fileName],
+                'fileContent' => [$fileName, $fileBase64],
+                'generateUniqueName' => true,
+                'rights' => $rights
+            ]);
+
+            if (isset($uploadRes['result']) && !empty($uploadRes['result']['ID'])) {
+                $fileRes = $uploadRes['result'];
+                $fileAttachments[] = [
+                    'id' => intval($fileRes['ID']),
+                    'name' => $fileRes['NAME'],
+                    'size' => intval($fileRes['SIZE']),
+                    'download_url' => $fileRes['DOWNLOAD_URL'],
+                    'detail_url' => $fileRes['DETAIL_URL']
+                ];
+            } else {
+                $uploadErr = $uploadRes['error_description'] ?? ($uploadRes['error'] ?? 'Unknown Disk Error');
+                echo json_encode(['status' => 'error', 'message' => 'Failed to upload file to Bitrix24 Drive: ' . $uploadErr]);
+                exit;
+            }
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Failed to initialize Task folder on Bitrix24 Drive.']);
+            exit;
+        }
+    }
+
     $stmt = $pdo->prepare("
-        INSERT INTO task_chat_messages (task_id, sender_id, sender_name, sender_avatar, message, visibility, allowed_user_ids)
-        VALUES (:task_id, :sender_id, :sender_name, :sender_avatar, :message, :visibility, :allowed_user_ids)
+        INSERT INTO task_chat_messages (task_id, sender_id, sender_name, sender_avatar, message, visibility, allowed_user_ids, file_attachments)
+        VALUES (:task_id, :sender_id, :sender_name, :sender_avatar, :message, :visibility, :allowed_user_ids, :file_attachments)
     ");
 
     $stmt->execute([
@@ -196,7 +335,8 @@ if ($action === 'send_message') {
         ':sender_avatar' => $currentUserAvatar,
         ':message' => $message,
         ':visibility' => $visibility,
-        ':allowed_user_ids' => json_encode(array_values($allowedUserIds))
+        ':allowed_user_ids' => json_encode(array_values($allowedUserIds)),
+        ':file_attachments' => json_encode($fileAttachments)
     ]);
 
     echo json_encode([

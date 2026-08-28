@@ -99,15 +99,28 @@ $authId = htmlspecialchars($auth['auth_token'] ?? '');
             </div>
         </div>
 
+        <!-- File Attachment Preview Area (Hidden by default) -->
+        <div class="attachment-preview-container" id="attachmentPreviewContainer" style="display: none;">
+            <div class="attachment-preview-chip">
+                <span class="file-icon">📎</span>
+                <span class="file-name" id="previewFileName">filename.ext</span>
+                <span class="file-size" id="previewFileSize">(0 KB)</span>
+                <button type="button" class="remove-attachment-btn" id="removeAttachmentBtn" title="Remove attachment">&times;</button>
+            </div>
+        </div>
+
         <!-- Input Box -->
         <form class="chat-input-form" id="chatForm" onsubmit="return false;">
             <div class="input-wrapper">
+                <button type="button" class="attach-btn" id="attachBtn" title="Attach file from computer">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                </button>
+                <input type="file" id="fileInput" name="attachment" style="display: none;">
                 <textarea 
                     id="messageInput" 
                     class="chat-textarea" 
-                    placeholder="Type your message... (Press Shift+Enter for new line, Enter to send)" 
+                    placeholder="Type your message or attach a file... (Press Shift+Enter for new line, Enter to send)" 
                     rows="1"
-                    required
                 ></textarea>
                 <button type="submit" class="send-btn" id="sendBtn">
                     <span>Send</span>

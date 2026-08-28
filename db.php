@@ -27,22 +27,29 @@ function getDbConnection() {
                 message TEXT NOT NULL,
                 visibility TEXT NOT NULL DEFAULT 'public',
                 allowed_user_ids TEXT DEFAULT '[]',
+                file_attachments TEXT DEFAULT '[]',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS idx_task_id ON task_chat_messages(task_id);
         ");
 
-        // Migration check for existing SQLite databases missing allowed_user_ids column
+        // Migration check for existing SQLite databases missing columns
         $cols = $pdo->query("PRAGMA table_info(task_chat_messages)")->fetchAll();
         $hasAllowedUsersCol = false;
+        $hasFileAttachmentsCol = false;
         foreach ($cols as $col) {
             if ($col['name'] === 'allowed_user_ids') {
                 $hasAllowedUsersCol = true;
-                break;
+            }
+            if ($col['name'] === 'file_attachments') {
+                $hasFileAttachmentsCol = true;
             }
         }
         if (!$hasAllowedUsersCol) {
             $pdo->exec("ALTER TABLE task_chat_messages ADD COLUMN allowed_user_ids TEXT DEFAULT '[]'");
+        }
+        if (!$hasFileAttachmentsCol) {
+            $pdo->exec("ALTER TABLE task_chat_messages ADD COLUMN file_attachments TEXT DEFAULT '[]'");
         }
 
         return $pdo;

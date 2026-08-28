@@ -18,11 +18,20 @@ document.addEventListener('DOMContentLoaded', function () {
     const userPickerContainer = document.getElementById('userPickerContainer');
     const userCheckboxList = document.getElementById('userCheckboxList');
 
+    // File attachments DOM selectors
+    const attachBtn = document.getElementById('attachBtn');
+    const fileInput = document.getElementById('fileInput');
+    const attachmentPreviewContainer = document.getElementById('attachmentPreviewContainer');
+    const previewFileName = document.getElementById('previewFileName');
+    const previewFileSize = document.getElementById('previewFileSize');
+    const removeAttachmentBtn = document.getElementById('removeAttachmentBtn');
+
     let currentVisibility = 'public';
     let isSubmitting = false;
     let pollInterval = null;
     let currentUser = null;
     let cachedParticipants = [];
+    let selectedFile = null;
 
     // Initialize Bitrix24 JS SDK
     if (typeof BX24 !== 'undefined') {
@@ -59,6 +68,49 @@ document.addEventListener('DOMContentLoaded', function () {
             resizeFrame();
         });
     });
+
+    // File Attachment Handlers
+    if (attachBtn && fileInput) {
+        attachBtn.addEventListener('click', function () {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', function () {
+            if (this.files && this.files.length > 0) {
+                selectedFile = this.files[0];
+                previewFileName.textContent = selectedFile.name;
+                previewFileSize.textContent = `(${formatBytes(selectedFile.size)})`;
+                attachmentPreviewContainer.style.display = 'block';
+                resizeFrame();
+            }
+        });
+    }
+
+    if (removeAttachmentBtn) {
+        removeAttachmentBtn.addEventListener('click', function () {
+            clearAttachment();
+        });
+    }
+
+    function clearAttachment() {
+        selectedFile = null;
+        if (fileInput) {
+            fileInput.value = '';
+        }
+        if (attachmentPreviewContainer) {
+            attachmentPreviewContainer.style.display = 'none';
+        }
+        resizeFrame();
+    }
+
+    function formatBytes(bytes, decimals = 1) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
 
     // Render User Checkbox Chips in Picker
     function renderUserPicker(participants) {
@@ -187,6 +239,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 ? `<img src="${msg.sender_avatar}" alt="${msg.sender_name}">`
                 : senderInitial;
 
+            let filesHtml = '';
+            if (msg.file_attachments && msg.file_attachments.length > 0) {
+                filesHtml = '<div class="message-attachments">';
+                msg.file_attachments.forEach(file => {
+                    filesHtml += `
+                        <div class="attachment-file-item">
+                            <span class="file-icon">📎</span>
+                            <div class="file-details">
+                                <a class="file-link" href="${escapeHtml(file.download_url)}" target="_blank" download="${escapeHtml(file.name)}">${escapeHtml(file.name)}</a>
+                                <span class="file-meta-size">(${formatBytes(file.size)})</span>
+                            </div>
+                            <a class="view-file-btn" href="${escapeHtml(file.detail_url)}" target="_blank" title="View in Bitrix24">👁️</a>
+                        </div>
+                    `;
+                });
+                filesHtml += '</div>';
+            }
+
             html += `
                 <div class="message-item ${isSelf ? 'self' : ''}" data-id="${msg.id}">
                     <div class="avatar">${avatarContent}</div>
@@ -195,7 +265,10 @@ document.addEventListener('DOMContentLoaded', function () {
                             <span class="sender-name">${msg.sender_name}</span>
                             <span class="message-time">${formatTime(msg.created_at)}</span>
                         </div>
-                        <div class="bubble">${escapeHtml(msg.message)}</div>
+                        <div class="bubble">
+                            ${msg.message ? `<div class="message-text">${escapeHtml(msg.message)}</div>` : ''}
+                            ${filesHtml}
+                        </div>
                         ${visBadgeHtml}
                     </div>
                 </div>
@@ -212,7 +285,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Send Message Function
     function sendMessage() {
         const text = messageInput.value.trim();
-        if (!text || isSubmitting) return;
+        if ((!text && !selectedFile) || isSubmitting) return;
 
         const selectedUserIds = [];
         if (currentVisibility === 'specific_users') {
@@ -237,6 +310,9 @@ document.addEventListener('DOMContentLoaded', function () {
         formData.append('message', text);
         formData.append('visibility', currentVisibility);
         formData.append('allowed_user_ids', JSON.stringify(selectedUserIds));
+        if (selectedFile) {
+            formData.append('attachment', selectedFile);
+        }
 
         fetch('api.php', {
             method: 'POST',
@@ -251,6 +327,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (data.status === 'success') {
                     messageInput.value = '';
                     messageInput.style.height = 'auto';
+                    clearAttachment();
                     fetchMessages();
                     scrollToBottom();
                 } else {
