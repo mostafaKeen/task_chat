@@ -255,7 +255,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <a class="file-link" href="${escapeHtml(fileDownloadUrl)}" target="_blank" download="${escapeHtml(fileName)}">${escapeHtml(fileName)}</a>
                                 <span class="file-meta-size">(${formatBytes(fileSize)})</span>
                             </div>
-                            <a class="view-file-btn" href="${escapeHtml(fileDetailUrl)}" target="_blank" title="View in Bitrix24">👁️</a>
                         </div>
                     `;
                 });
