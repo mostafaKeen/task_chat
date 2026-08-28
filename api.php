@@ -173,6 +173,21 @@ if ($action === 'get_messages') {
         }
 
         if ($canView) {
+            $attachments = json_decode($msg['file_attachments'] ?? '[]', true) ?: [];
+            $formattedAttachments = [];
+            foreach ($attachments as $file) {
+                if (is_array($file)) {
+                    // Check and fix relative URLs
+                    if (isset($file['download_url']) && strpos($file['download_url'], '/') === 0) {
+                        $file['download_url'] = 'https://' . $domain . $file['download_url'];
+                    }
+                    if (isset($file['detail_url']) && strpos($file['detail_url'], '/') === 0) {
+                        $file['detail_url'] = 'https://' . $domain . $file['detail_url'];
+                    }
+                    $formattedAttachments[] = $file;
+                }
+            }
+
             $filteredMessages[] = [
                 'id' => intval($msg['id']),
                 'sender_id' => $senderId,
@@ -181,7 +196,7 @@ if ($action === 'get_messages') {
                 'message' => htmlspecialchars($msg['message'] ?? ''),
                 'visibility' => $msg['visibility'],
                 'allowed_user_ids' => $allowedUserIds,
-                'file_attachments' => json_decode($msg['file_attachments'] ?? '[]', true) ?: [],
+                'file_attachments' => $formattedAttachments,
                 'created_at' => $msg['created_at'],
                 'is_self' => ($senderId === $currentUserId)
             ];
