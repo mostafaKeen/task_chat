@@ -174,6 +174,8 @@ document.addEventListener('DOMContentLoaded', function () {
         sendMessage();
     });
 
+    let lastMessagesJsonHash = '';
+
     // Fetch Messages Function
     function fetchMessages() {
         const url = `api.php?action=get_messages&task_id=${taskId}&DOMAIN=${encodeURIComponent(domain)}&AUTH_ID=${encodeURIComponent(authId)}`;
@@ -193,7 +195,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         renderUserPicker(cachedParticipants);
                     }
 
-                    renderMessages(data.messages || []);
+                    // Create a unique fingerprint hash representing the message IDs and contents
+                    const messagesListStr = (data.messages || []).map(m => `${m.id}-${m.message}-${(m.file_attachments||[]).length}`).join('|');
+                    
+                    // Only re-render if the message structure has actually changed
+                    if (messagesListStr !== lastMessagesJsonHash) {
+                        lastMessagesJsonHash = messagesListStr;
+                        renderMessages(data.messages || []);
+                    }
                 } else {
                     console.error('API Error:', data.message);
                 }
