@@ -176,12 +176,12 @@ if ($action === 'get_messages') {
             $filteredMessages[] = [
                 'id' => intval($msg['id']),
                 'sender_id' => $senderId,
-                'sender_name' => htmlspecialchars($msg['sender_name']),
-                'sender_avatar' => $msg['sender_avatar'],
-                'message' => htmlspecialchars($msg['message']),
+                'sender_name' => htmlspecialchars($msg['sender_name'] ?? ''),
+                'sender_avatar' => $msg['sender_avatar'] ?? '',
+                'message' => htmlspecialchars($msg['message'] ?? ''),
                 'visibility' => $msg['visibility'],
                 'allowed_user_ids' => $allowedUserIds,
-                'file_attachments' => json_decode($msg['file_attachments'] ?? '[]', true),
+                'file_attachments' => json_decode($msg['file_attachments'] ?? '[]', true) ?: [],
                 'created_at' => $msg['created_at'],
                 'is_self' => ($senderId === $currentUserId)
             ];

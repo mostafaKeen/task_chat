@@ -236,21 +236,26 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const avatarContent = msg.sender_avatar 
-                ? `<img src="${msg.sender_avatar}" alt="${msg.sender_name}">`
+                ? `<img src="${escapeHtml(msg.sender_avatar)}" alt="${escapeHtml(msg.sender_name)}">`
                 : senderInitial;
 
             let filesHtml = '';
             if (msg.file_attachments && msg.file_attachments.length > 0) {
                 filesHtml = '<div class="message-attachments">';
                 msg.file_attachments.forEach(file => {
+                    if (!file) return;
+                    const fileName = file.name || 'Unnamed File';
+                    const fileDownloadUrl = file.download_url || '#';
+                    const fileDetailUrl = file.detail_url || '#';
+                    const fileSize = file.size || 0;
                     filesHtml += `
                         <div class="attachment-file-item">
                             <span class="file-icon">📎</span>
                             <div class="file-details">
-                                <a class="file-link" href="${escapeHtml(file.download_url)}" target="_blank" download="${escapeHtml(file.name)}">${escapeHtml(file.name)}</a>
-                                <span class="file-meta-size">(${formatBytes(file.size)})</span>
+                                <a class="file-link" href="${escapeHtml(fileDownloadUrl)}" target="_blank" download="${escapeHtml(fileName)}">${escapeHtml(fileName)}</a>
+                                <span class="file-meta-size">(${formatBytes(fileSize)})</span>
                             </div>
-                            <a class="view-file-btn" href="${escapeHtml(file.detail_url)}" target="_blank" title="View in Bitrix24">👁️</a>
+                            <a class="view-file-btn" href="${escapeHtml(fileDetailUrl)}" target="_blank" title="View in Bitrix24">👁️</a>
                         </div>
                     `;
                 });
@@ -356,7 +361,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function escapeHtml(str) {
-        return str
+        if (str == null) return '';
+        return String(str)
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")

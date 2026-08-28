@@ -24,7 +24,7 @@ function getDbConnection() {
                 sender_id INTEGER NOT NULL,
                 sender_name TEXT NOT NULL,
                 sender_avatar TEXT DEFAULT '',
-                message TEXT NOT NULL,
+                message TEXT DEFAULT '',
                 visibility TEXT NOT NULL DEFAULT 'public',
                 allowed_user_ids TEXT DEFAULT '[]',
                 file_attachments TEXT DEFAULT '[]',
@@ -37,6 +37,7 @@ function getDbConnection() {
         $cols = $pdo->query("PRAGMA table_info(task_chat_messages)")->fetchAll();
         $hasAllowedUsersCol = false;
         $hasFileAttachmentsCol = false;
+        $messageIsNotNull = false;
         foreach ($cols as $col) {
             if ($col['name'] === 'allowed_user_ids') {
                 $hasAllowedUsersCol = true;
@@ -44,12 +45,36 @@ function getDbConnection() {
             if ($col['name'] === 'file_attachments') {
                 $hasFileAttachmentsCol = true;
             }
+            if ($col['name'] === 'message' && $col['notnull'] == 1) {
+                $messageIsNotNull = true;
+            }
         }
         if (!$hasAllowedUsersCol) {
             $pdo->exec("ALTER TABLE task_chat_messages ADD COLUMN allowed_user_ids TEXT DEFAULT '[]'");
         }
         if (!$hasFileAttachmentsCol) {
             $pdo->exec("ALTER TABLE task_chat_messages ADD COLUMN file_attachments TEXT DEFAULT '[]'");
+        }
+        // Migration: Change message column from NOT NULL to nullable (for file-only messages)
+        if ($messageIsNotNull) {
+            $pdo->exec("
+                CREATE TABLE task_chat_messages_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL,
+                    sender_id INTEGER NOT NULL,
+                    sender_name TEXT NOT NULL,
+                    sender_avatar TEXT DEFAULT '',
+                    message TEXT DEFAULT '',
+                    visibility TEXT NOT NULL DEFAULT 'public',
+                    allowed_user_ids TEXT DEFAULT '[]',
+                    file_attachments TEXT DEFAULT '[]',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO task_chat_messages_new SELECT id, task_id, sender_id, sender_name, sender_avatar, COALESCE(message, ''), visibility, allowed_user_ids, file_attachments, created_at FROM task_chat_messages;
+                DROP TABLE task_chat_messages;
+                ALTER TABLE task_chat_messages_new RENAME TO task_chat_messages;
+                CREATE INDEX IF NOT EXISTS idx_task_id ON task_chat_messages(task_id);
+            ");
         }
 
         return $pdo;
